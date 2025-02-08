@@ -110,7 +110,17 @@ class NiuniuPlugin(Star):
                     min_length = config.get('min_length', 1)
                     max_length = config.get('max_length', 10)
                     length = random.randint(min_length, max_length)
-                    self.niuniu_lengths[group_id][user_id] = length
+                    bot = self.context.get_bot()
+                    try:
+                        member_info = await bot.get_group_member_info(group_id=int(group_id), user_id=int(user_id))
+                        nickname = member_info.get("nickname", "未知用户")
+                    except Exception as e:
+                        logger.warning(f"获取用户 {user_id} 昵称时出错: {e}", exc_info=True)
+                        nickname = "未知用户"
+                    self.niuniu_lengths[group_id][user_id] = {
+                        "length": length,
+                        "nickname": nickname
+                    }
                     self._save_niuniu_lengths()
                     yield event.plain_result(f"注册成功，你的牛牛现在有{length} cm")
                 else:
@@ -187,13 +197,13 @@ class NiuniuPlugin(Star):
                     else:
                         message = random.choice(no_effect_messages)
 
-                self.niuniu_lengths[group_id][user_id] += change
-                if self.niuniu_lengths[group_id][user_id] < 1:
-                    self.niuniu_lengths[group_id][user_id] = 1
+                self.niuniu_lengths[group_id][user_id]["length"] += change
+                if self.niuniu_lengths[group_id][user_id]["length"] < 1:
+                    self.niuniu_lengths[group_id][user_id]["length"] = 1
                 self._save_niuniu_lengths()
                 # 更新上次打胶时间
                 self.last_dajiao_time[user_id] = current_time
-                yield event.plain_result(self.format_niuniu_message(message, self.niuniu_lengths[group_id][user_id]))
+                yield event.plain_result(self.format_niuniu_message(message, self.niuniu_lengths[group_id][user_id]["length"]))
             else:
                 yield event.plain_result("你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
         except Exception as e:
@@ -208,7 +218,7 @@ class NiuniuPlugin(Star):
             user_id = str(event.get_sender_id())
             group_id = event.message_obj.group_id
             if group_id and group_id in self.niuniu_lengths and user_id in self.niuniu_lengths[group_id]:
-                length = self.niuniu_lengths[group_id][user_id]
+                length = self.niuniu_lengths[group_id][user_id]["length"]
 
                 # 根据长度给出评价
                 if length <= 12:
@@ -244,15 +254,15 @@ class NiuniuPlugin(Star):
                 if at_users:
                     target_user_id = at_users[0]
                     if target_user_id in self.niuniu_lengths[group_id]:
-                        user_length = self.niuniu_lengths[group_id][user_id]
-                        target_length = self.niuniu_lengths[group_id][target_user_id]
+                        user_length = self.niuniu_lengths[group_id][user_id]["length"]
+                        target_length = self.niuniu_lengths[group_id][target_user_id]["length"]
                         diff = user_length - target_length
 
                         # 增加随机事件：两败俱伤，长度减半
                         double_loss_probability = 0.05  # 5% 的概率两败俱伤
                         if self.check_probability(double_loss_probability):
-                            self.niuniu_lengths[group_id][user_id] = max(1, user_length // 2)
-                            self.niuniu_lengths[group_id][target_user_id] = max(1, target_length // 2)
+                            self.niuniu_lengths[group_id][user_id]["length"] = max(1, user_length // 2)
+                            self.niuniu_lengths[group_id][target_user_id]["length"] = max(1, target_length // 2)
                             self._save_niuniu_lengths()
                             yield event.plain_result("发生了意外！双方的牛牛都折断了，长度都减半啦！")
                             return
@@ -269,11 +279,11 @@ class NiuniuPlugin(Star):
                                 min_bonus = config.get('min_bonus', 0)
                                 max_bonus = config.get('max_bonus', 3)
                                 bonus = random.randint(min_bonus, max_bonus)
-                                self.niuniu_lengths[group_id][user_id] += bonus
+                                self.niuniu_lengths[group_id][user_id]["length"] += bonus
                                 self._save_niuniu_lengths()
                                 message = random.choice(hardness_win_messages)
                                 yield event.plain_result(self.format_niuniu_message(f"{message} 你的长度增加{bonus}cm",
-                                                                                    self.niuniu_lengths[group_id][user_id]))
+                                                                                    self.niuniu_lengths[group_id][user_id]["length"]))
                                 return
                             else:
                                 yield event.plain_result("你们的牛牛长度差距不大，继续加油哦！")
@@ -282,17 +292,17 @@ class NiuniuPlugin(Star):
                             min_bonus = config.get('min_bonus', 0)
                             max_bonus = config.get('max_bonus', 3)
                             bonus = random.randint(min_bonus, max_bonus)
-                            self.niuniu_lengths[group_id][user_id] += bonus
+                            self.niuniu_lengths[group_id][user_id]["length"] += bonus
                             self._save_niuniu_lengths()
                             yield event.plain_result(self.format_niuniu_message(
                                 f"你以绝对的长度令对方屈服了，你的长度增加{bonus}cm",
-                                self.niuniu_lengths[group_id][user_id]))
+                                self.niuniu_lengths[group_id][user_id]["length"]))
                         else:
                             config = self.get_niuniu_config()
                             min_bonus = config.get('min_bonus', 0)
                             max_bonus = config.get('max_bonus', 3)
                             bonus = random.randint(min_bonus, max_bonus)
-                            self.niuniu_lengths[group_id][target_user_id] += bonus
+                            self.niuniu_lengths[group_id][target_user_id]["length"] += bonus
                             self._save_niuniu_lengths()
                             if bonus > 0:
                                 if target_length + bonus >= 100:
@@ -319,17 +329,11 @@ class NiuniuPlugin(Star):
             logger.info("收到 '牛牛排行' 指令")
             group_id = event.message_obj.group_id
             if group_id and group_id in self.niuniu_lengths:
-                sorted_niuniu = sorted(self.niuniu_lengths[group_id].items(), key=lambda x: x[1], reverse=True)
+                sorted_niuniu = sorted(self.niuniu_lengths[group_id].items(), key=lambda x: x[1]["length"], reverse=True)
                 rank_message = "牛牛排行榜：\n"
-                # 假设通过 context 获取 bot 实例
-                bot = self.context.get_bot()
-                for i, (user_id, length) in enumerate(sorted_niuniu, start=1):
-                    try:
-                        member_info = await bot.get_group_member_info(group_id=int(group_id), user_id=int(user_id))
-                        nickname = member_info.get("nickname", "未知用户")
-                    except Exception as e:
-                        logger.warning(f"获取用户 {user_id} 信息时出错: {e}", exc_info=True)
-                        nickname = "未知用户"
+                for i, (user_id, info) in enumerate(sorted_niuniu, start=1):
+                    length = info["length"]
+                    nickname = info["nickname"]
                     if length >= 100:
                         length_str = f"{length / 100:.2f}m"
                     else:
