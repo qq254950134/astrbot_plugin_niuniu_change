@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 
 @register("niuniu_plugin", "作者名", "牛牛插件，包含注册牛牛、打胶、我的牛牛、比划比划、牛牛排行等功能", "1.0.0")
 class NiuniuPlugin(Star):
-    def __init__(self, context: Context, config: dict):
+    def __init__(self, context: Context, config: dict = None):  # 修改这里，给 config 参数设置默认值
         super().__init__(context)
+        if config is None:
+            config = {}
         self.config = config
         self.niuniu_lengths = self._load_niuniu_lengths()
         logger.info(f"插件配置: {self.config}")
