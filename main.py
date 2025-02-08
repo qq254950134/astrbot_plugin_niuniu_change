@@ -8,6 +8,8 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api.message_components import At
 from typing import List
 from astrbot.api.message_components import BaseMessageComponent
+# 注释掉不必要的导入语句
+# from astrbot.api.message import MessageType, MessageMember
 
 # 定义 YAML 文件路径
 NIUNIU_LENGTHS_FILE = 'niuniu_lengths.yml'
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @register("niuniu_plugin", "作者名", "牛牛插件，包含注册牛牛、打胶、我的牛牛、比划比划、牛牛排行等功能", "1.0.0")
 class NiuniuPlugin(Star):
-    def __init__(self, context: Context, config: dict = None):  # 修改这里，给 config 参数设置默认值
+    def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         if config is None:
             config = {}
