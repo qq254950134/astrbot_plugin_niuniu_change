@@ -12,7 +12,7 @@ if not os.path.exists(PLUGIN_DIR):
 NIUNIU_LENGTHS_FILE = os.path.join(PLUGIN_DIR, 'niuniu_lengths.yml')
 
 
-@register("niuniu_plugin", "长安某", "牛牛插件，包含注册牛牛、打胶、我的牛牛、比划比划、牛牛排行等功能", "1.0.0")
+@register("niuniu_plugin", "长安某", "牛牛插件，包含注册牛牛、打胶、我的牛牛、比划比划、牛牛排行等功能", "2.2.0")
 class NiuniuPlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -69,19 +69,42 @@ class NiuniuPlugin(Star):
         return f"{message}，当前牛牛长度为{length_str}"
 
     @event_message_type(EventMessageType.ALL)
-    async def filter_messages(self, event: AstrMessageEvent):
-        """全局事件过滤器，检查消息是否来自群聊"""
+    async def on_all_messages(self, event: AstrMessageEvent):
+        """全局事件监听，处理所有消息"""
         group_id = event.message_obj.group_id if hasattr(event.message_obj, "group_id") else None
         if not group_id:
             return
-        return event
+
+        message_str = event.message_str.strip()
+
+        if message_str == "注册牛牛":
+            async for result in self.register_niuniu(event):
+                yield result
+        elif message_str == "打胶":
+            async for result in self.dajiao(event):
+                yield result
+        elif message_str == "我的牛牛":
+            async for result in self.my_niuniu(event):
+                yield result
+        elif message_str.startswith("比划比划"):
+            parts = message_str.split(maxsplit=1)
+            target_name = parts[1].strip() if len(parts) > 1 else None
+            async for result in self.compare_niuniu(event, target_name):
+                yield result
+        elif message_str == "牛牛排行":
+            async for result in self.niuniu_rank(event):
+                yield result
+        elif message_str == "牛牛菜单":
+            async for result in self.niuniu_menu(event):
+                yield result
+
+        yield event
 
     def parse_at_users(self, event: AstrMessageEvent):
         """解析消息中的 @ 用户"""
         chain = event.message_obj.message
         return [str(comp.qq) for comp in chain if isinstance(comp, At)]
 
-    @command("注册牛牛")
     async def register_niuniu(self, event: AstrMessageEvent):
         """注册牛牛指令处理函数"""
         user_id = str(event.get_sender_id())
@@ -106,7 +129,6 @@ class NiuniuPlugin(Star):
         else:
             yield event.plain_result("该指令仅限群聊中使用。")
 
-    @command("打胶")
     async def dajiao(self, event: AstrMessageEvent):
         """打胶指令处理函数"""
         user_id = str(event.get_sender_id())
@@ -215,7 +237,6 @@ class NiuniuPlugin(Star):
         else:
             yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
 
-    @command("我的牛牛")
     async def my_niuniu(self, event: AstrMessageEvent):
         """我的牛牛指令处理函数"""
         user_id = str(event.get_sender_id())
@@ -244,7 +265,6 @@ class NiuniuPlugin(Star):
         else:
             yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
 
-    @command("比划比划")
     async def compare_niuniu(self, event: AstrMessageEvent, target_name: str = None):
         """比划比划指令处理函数"""
         user_id = str(event.get_sender_id())
@@ -272,6 +292,11 @@ class NiuniuPlugin(Star):
                     return
                 else:
                     target_user_id = matched_users[0]
+
+                    # 检查匹配到的是否是自己
+                    if target_user_id == user_id:
+                        yield event.plain_result(f"{sender_nickname}，你不能和自己比划。")
+                        return
             else:
                 yield event.plain_result(f"{sender_nickname}，请 @ 一名已注册牛牛的用户或输入用户名关键词进行比划。")
                 return
@@ -326,7 +351,6 @@ class NiuniuPlugin(Star):
                 user_info["length"] = max(1, user_length // 2)
                 target_info["length"] = max(1, target_length // 2)
                 self._save_niuniu_lengths()
-                # 以下两行缩进，属于 if 语句块
                 yield event.plain_result(f"{sender_nickname} 和 {target_info['nickname']}，你们俩的牛牛刚一碰撞，就像两颗脆弱的玻璃珠，“啪嗒”一下都折断啦！双方的牛牛长度都减半咯！")
                 return
 
@@ -391,7 +415,6 @@ class NiuniuPlugin(Star):
         else:
             yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
 
-    @command("牛牛排行")
     async def niuniu_rank(self, event: AstrMessageEvent):
         """牛牛排行指令处理函数"""
         group_id = event.message_obj.group_id
@@ -410,7 +433,6 @@ class NiuniuPlugin(Star):
         else:
             yield event.plain_result("当前群里还没有人注册牛牛呢！")
 
-    @command("牛牛菜单")
     async def niuniu_menu(self, event: AstrMessageEvent):
         """牛牛菜单指令处理函数"""
         menu = """
