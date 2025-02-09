@@ -326,69 +326,70 @@ class NiuniuPlugin(Star):
                 user_info["length"] = max(1, user_length // 2)
                 target_info["length"] = max(1, target_length // 2)
                 self._save_niuniu_lengths()
-            yield event.plain_result(f"{sender_nickname} 和 {target_info['nickname']}，你们俩的牛牛刚一碰撞，就像两颗脆弱的玻璃珠，“啪嗒”一下都折断啦！双方的牛牛长度都减半咯！")
-            return
+                # 以下两行缩进，属于 if 语句块
+                yield event.plain_result(f"{sender_nickname} 和 {target_info['nickname']}，你们俩的牛牛刚一碰撞，就像两颗脆弱的玻璃珠，“啪嗒”一下都折断啦！双方的牛牛长度都减半咯！")
+                return
 
-        hardness_win_messages = [
-            "{nickname}，虽然你们的牛牛长度相近，但你的牛牛如同钢铁般坚硬，一下子就碾压了对方，太厉害了！",
-            "{nickname}，关键时刻，你的牛牛硬度爆棚，像一把利刃刺穿了对方的防线，成功战胜对手！",
-            "{nickname}，长度差不多又怎样，你的牛牛凭借着惊人的硬度脱颖而出，霸气侧漏！"
-        ]
+            hardness_win_messages = [
+                "{nickname}，虽然你们的牛牛长度相近，但你的牛牛如同钢铁般坚硬，一下子就碾压了对方，太厉害了！",
+                "{nickname}，关键时刻，你的牛牛硬度爆棚，像一把利刃刺穿了对方的防线，成功战胜对手！",
+                "{nickname}，长度差不多又怎样，你的牛牛凭借着惊人的硬度脱颖而出，霸气侧漏！"
+            ]
 
-        if abs(diff) <= 10:
-            if self.check_probability(0.3):
+            if abs(diff) <= 10:
+                if self.check_probability(0.3):
+                    config = self.get_niuniu_config()
+                    min_bonus = config.get('min_bonus', 0)
+                    max_bonus = config.get('max_bonus', 3)
+                    bonus = random.randint(min_bonus, max_bonus)
+                    user_info["length"] += bonus
+                    self._save_niuniu_lengths()
+                    message = random.choice(hardness_win_messages).format(nickname=sender_nickname)
+                    yield event.plain_result(self.format_niuniu_message(f"{message} 你的长度增加{bonus}cm",
+                                                                        user_info["length"]))
+                    return
+                else:
+                    yield event.plain_result(f"{sender_nickname} 和 {target_info['nickname']}，你们的牛牛长度差距不大，就像两位旗鼓相当的对手，继续加油哦！")
+            elif diff > 0:
                 config = self.get_niuniu_config()
                 min_bonus = config.get('min_bonus', 0)
                 max_bonus = config.get('max_bonus', 3)
                 bonus = random.randint(min_bonus, max_bonus)
                 user_info["length"] += bonus
                 self._save_niuniu_lengths()
-                message = random.choice(hardness_win_messages).format(nickname=sender_nickname)
-                yield event.plain_result(self.format_niuniu_message(f"{message} 你的长度增加{bonus}cm",
-                                                                    user_info["length"]))
-                return
+                win_messages = [
+                    "{nickname}，你的牛牛就像一条威风凛凛的巨龙，以绝对的长度优势把 {target_nickname} 的牛牛打得节节败退，太威武啦！",
+                    "{nickname}，你的牛牛如同一个勇猛的战士，用长长的身躯轻松碾压了 {target_nickname} 的牛牛，厉害极了！",
+                    "{nickname}，你家牛牛简直就是王者降临，长度上把 {target_nickname} 远远甩在身后，让对方毫无还手之力！"
+                ]
+                message = random.choice(win_messages).format(nickname=sender_nickname, target_nickname=target_info["nickname"])
+                yield event.plain_result(self.format_niuniu_message(
+                    f"{message} 你的长度增加{bonus}cm",
+                    user_info["length"]))
             else:
-                yield event.plain_result(f"{sender_nickname} 和 {target_info['nickname']}，你们的牛牛长度差距不大，就像两位旗鼓相当的对手，继续加油哦！")
-        elif diff > 0:
-            config = self.get_niuniu_config()
-            min_bonus = config.get('min_bonus', 0)
-            max_bonus = config.get('max_bonus', 3)
-            bonus = random.randint(min_bonus, max_bonus)
-            user_info["length"] += bonus
-            self._save_niuniu_lengths()
-            win_messages = [
-                "{nickname}，你的牛牛就像一条威风凛凛的巨龙，以绝对的长度优势把 {target_nickname} 的牛牛打得节节败退，太威武啦！",
-                "{nickname}，你的牛牛如同一个勇猛的战士，用长长的身躯轻松碾压了 {target_nickname} 的牛牛，厉害极了！",
-                "{nickname}，你家牛牛简直就是王者降临，长度上把 {target_nickname} 远远甩在身后，让对方毫无还手之力！"
-            ]
-            message = random.choice(win_messages).format(nickname=sender_nickname, target_nickname=target_info["nickname"])
-            yield event.plain_result(self.format_niuniu_message(
-                f"{message} 你的长度增加{bonus}cm",
-                user_info["length"]))
-        else:
-            config = self.get_niuniu_config()
-            min_bonus = config.get('min_bonus', 0)
-            max_bonus = config.get('max_bonus', 3)
-            bonus = random.randint(min_bonus, max_bonus)
-            target_info["length"] += bonus
-            self._save_niuniu_lengths()
-            lose_messages = [
-                "{nickname}，很可惜呀，这次你的牛牛就像一只小虾米，在长度上完全比不过 {target_nickname} 的大鲸鱼，下次加油呀！",
-                "{nickname}，{target_nickname} 的牛牛如同一个巨人，在长度上把你的牛牛秒成了渣渣，你别气馁，还有机会！",
-                "{nickname}，这一回你的牛牛就像一颗小豆芽，长度远远不及 {target_nickname} 的参天大树，再接再厉，争取下次赢回来！"
-            ]
-            message = random.choice(lose_messages).format(nickname=sender_nickname, target_nickname=target_info["nickname"])
-            if bonus > 0:
-                target_new_length = target_info["length"]
-                if target_new_length >= 100:
-                    length_str = f"{target_new_length / 100:.2f}m"
+                config = self.get_niuniu_config()
+                min_bonus = config.get('min_bonus', 0)
+                max_bonus = config.get('max_bonus', 3)
+                bonus = random.randint(min_bonus, max_bonus)
+                target_info["length"] += bonus
+                self._save_niuniu_lengths()
+                lose_messages = [
+                    "{nickname}，很可惜呀，这次你的牛牛就像一只小虾米，在长度上完全比不过 {target_nickname} 的大鲸鱼，下次加油呀！",
+                    "{nickname}，{target_nickname} 的牛牛如同一个巨人，在长度上把你的牛牛秒成了渣渣，你别气馁，还有机会！",
+                    "{nickname}，这一回你的牛牛就像一颗小豆芽，长度远远不及 {target_nickname} 的参天大树，再接再厉，争取下次赢回来！"
+                ]
+                message = random.choice(lose_messages).format(nickname=sender_nickname, target_nickname=target_info["nickname"])
+                if bonus > 0:
+                    target_new_length = target_info["length"]
+                    if target_new_length >= 100:
+                        length_str = f"{target_new_length / 100:.2f}m"
+                    else:
+                        length_str = f"{target_new_length}cm"
+                    yield event.plain_result(f"{message} {target_info['nickname']} 的长度增加{bonus}cm，当前长度为{length_str}")
                 else:
-                    length_str = f"{target_new_length}cm"
-                yield event.plain_result(f"{message} {target_info['nickname']} 的长度增加{bonus}cm，当前长度为{length_str}")
-            else:
-                yield event.plain_result(f"{message} 不过 {target_info['nickname']} 的长度没有增加。")
-    else:
-        yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
+                    yield event.plain_result(f"{message} 不过 {target_info['nickname']} 的长度没有增加。")
+        else:
+            yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
 
     @command("牛牛排行")
     async def niuniu_rank(self, event: AstrMessageEvent):
