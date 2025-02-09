@@ -21,7 +21,7 @@ class NiuniuPlugin(Star):
             config = {}
         self.config = config
         self.niuniu_lengths = self._load_niuniu_lengths()
-        # 记录每个用户的上次打胶时间
+        # 记录每个用户的上次打胶时间和冷却时长
         self.last_dajiao_time = {}
 
     def _create_niuniu_lengths_file(self):
@@ -113,31 +113,74 @@ class NiuniuPlugin(Star):
             user_info = self.niuniu_lengths[group_id][user_id]
             # 检查冷却期
             current_time = time.time()
-            last_time = self.last_dajiao_time.get(user_id, 0)
+            last_time_info = self.last_dajiao_time.get(user_id, (0, 0))
+            last_time = last_time_info[0]
+            cooldown = last_time_info[1]
             time_diff = current_time - last_time
 
-            # 定义冷却期范围（单位：秒）
-            min_cooldown = 5 * 60  # 5 分钟
-            max_cooldown = 2 * 60 * 60  # 2 小时
-            base_cooldown = 30 * 60  # 30 分钟
-
-            # 根据上次打胶时间动态调整冷却期
-            if time_diff < min_cooldown:
-                remaining_time = min_cooldown - time_diff
-                yield event.plain_result(f"{sender_nickname}，你打胶太频繁啦，还需等待 {remaining_time:.0f} 秒（约 {remaining_time // 60} 分钟）才能再次打胶。")
+            # 30 分钟内不允许打胶
+            MIN_COOLDOWN = 30 * 60
+            if time_diff < MIN_COOLDOWN:
+                cooldown_messages = [
+                    f"{sender_nickname}，你打胶太频繁啦，悠着点呀！",
+                    f"{sender_nickname}，别这么着急，打胶要适度哦！",
+                    f"{sender_nickname}，打胶节奏太快啦，缓缓再搞！",
+                    f"{sender_nickname}，这么频繁打胶可不行，歇会儿吧！"
+                ]
+                yield event.plain_result(random.choice(cooldown_messages))
                 return
 
             # 随机生成冷却期，范围在 30 分钟到 2 小时之间
-            cooldown = random.randint(base_cooldown, max_cooldown)
+            if time_diff >= cooldown:
+                cooldown = random.randint(MIN_COOLDOWN, 2 * 60 * 60)
+            else:
+                # 超过 30 分钟但没到冷却时长，计算失败概率
+                failure_probability = (cooldown - time_diff) / (cooldown - MIN_COOLDOWN)
 
-            if time_diff < cooldown:
-                remaining_time = cooldown - time_diff
-                yield event.plain_result(f"{sender_nickname}，你打胶太频繁啦，还需等待 {remaining_time:.0f} 秒（约 {remaining_time // 60} 分钟）才能再次打胶。")
+                config = self.get_niuniu_config()
+                min_change = config.get('min_change', -5)
+                max_change = config.get('max_change', 5)
+
+                increase_messages = [
+                    "{nickname}，你的牛牛还没恢复呢，但你强行打胶，没想到你的牛牛天赋惊人，增长了{change}cm",
+                    "{nickname}，牛牛还在虚弱期，你强行打胶，结果牛牛超常发挥，增长了{change}cm",
+                    "{nickname}，你的牛牛还没缓过来呢，不过你强行打胶，牛牛竟意外增长了{change}cm"
+                ]
+                decrease_messages = [
+                    "{nickname}，你的牛牛还没好，你强行打胶，牛牛受伤了，缩短了{change}cm",
+                    "{nickname}，牛牛还在恢复中，你强行打胶，导致牛牛长度减少了{change}cm",
+                    "{nickname}，你的牛牛还很脆弱，你强行打胶，牛牛缩短了{change}cm"
+                ]
+                no_effect_messages = [
+                    "{nickname}，你的牛牛还没恢复，你强行打胶，结果没啥效果",
+                    "{nickname}，牛牛状态不佳，你强行打胶，这次打了个寂寞",
+                    "{nickname}，你的牛牛还在虚弱，你强行打胶，牛牛没什么变化"
+                ]
+
+                if self.check_probability(failure_probability):
+                    # 打胶失败，触发无变化效果
+                    message = random.choice(no_effect_messages).format(nickname=sender_nickname)
+                    change = 0
+                else:
+                    change = random.randint(min_change, max_change)
+                    if change > 0:
+                        message = random.choice(increase_messages).format(nickname=sender_nickname, change=change)
+                    elif change < 0:
+                        # 确保 change 是正数，用于格式化输出
+                        positive_change = -change
+                        message = random.choice(decrease_messages).format(nickname=sender_nickname, change=positive_change)
+                    else:
+                        message = random.choice(no_effect_messages).format(nickname=sender_nickname)
+
+                user_info["length"] += change
+                if user_info["length"] < 1:
+                    user_info["length"] = 1
+                self._save_niuniu_lengths()
+                # 更新上次打胶时间和冷却时长
+                self.last_dajiao_time[user_id] = (current_time, cooldown)
+                yield event.plain_result(self.format_niuniu_message(message, user_info["length"]))
                 return
 
-            # 根据时间间隔计算受伤概率
-            # 时间间隔越短，受伤概率越大
-            injury_probability = 1 - (time_diff / cooldown)
             config = self.get_niuniu_config()
             min_change = config.get('min_change', -5)
             max_change = config.get('max_change', 5)
@@ -148,9 +191,9 @@ class NiuniuPlugin(Star):
                 "{nickname}，打胶效果显著，牛牛一下子就长了{change}cm，前途无量啊！"
             ]
             decrease_messages = [
-                "{nickname}，哎呀，打胶过度，牛牛像被霜打的茄子，缩短了{-change}cm呢",
-                "{nickname}，用力过猛，牛牛惨遭重创，缩短了{-change}cm，心疼它三秒钟",
-                "{nickname}，这波操作不太妙，牛牛缩水了{-change}cm，下次悠着点啊！"
+                "{nickname}，哎呀，打胶过度，牛牛像被霜打的茄子，缩短了{change}cm呢",
+                "{nickname}，用力过猛，牛牛惨遭重创，缩短了{change}cm，心疼它三秒钟",
+                "{nickname}，这波操作不太妙，牛牛缩水了{change}cm，下次悠着点啊！"
             ]
             no_effect_messages = [
                 "{nickname}，这次打胶好像没什么效果哦，再接再厉吧",
@@ -158,23 +201,21 @@ class NiuniuPlugin(Star):
                 "{nickname}，这波打胶无功而返，牛牛依旧岿然不动"
             ]
 
-            if self.check_probability(injury_probability):
-                # 受伤，缩短长度
-                change = random.randint(min_change, -1)
-                message = random.choice(decrease_messages).format(nickname=sender_nickname, change=change)
+            change = random.randint(min_change, max_change)
+            if change > 0:
+                message = random.choice(increase_messages).format(nickname=sender_nickname, change=change)
+            elif change < 0:
+                positive_change = -change
+                message = random.choice(decrease_messages).format(nickname=sender_nickname, change=positive_change)
             else:
-                change = random.randint(0, max_change)
-                if change > 0:
-                    message = random.choice(increase_messages).format(nickname=sender_nickname, change=change)
-                else:
-                    message = random.choice(no_effect_messages).format(nickname=sender_nickname)
+                message = random.choice(no_effect_messages).format(nickname=sender_nickname)
 
             user_info["length"] += change
             if user_info["length"] < 1:
                 user_info["length"] = 1
             self._save_niuniu_lengths()
-            # 更新上次打胶时间
-            self.last_dajiao_time[user_id] = current_time
+            # 更新上次打胶时间和冷却时长
+            self.last_dajiao_time[user_id] = (current_time, cooldown)
             yield event.plain_result(self.format_niuniu_message(message, user_info["length"]))
         else:
             yield event.plain_result(f"{sender_nickname}，你还没有注册牛牛，请先发送“注册牛牛”进行注册。")
@@ -314,7 +355,7 @@ class NiuniuPlugin(Star):
 1. 注册牛牛：开启你的牛牛之旅，随机获得初始长度的牛牛。
 2. 打胶：通过此操作有机会让你的牛牛长度增加或减少，注意有冷却时间哦。
 3. 我的牛牛：查看你当前牛牛的长度，并获得相应评价。
-4. 比划比划：@ 一名已注册牛牛的用户，与对方比较牛牛长度，获胜方有机会增加长度。
+4. 比划比划：@ 一名已注册牛牛的用户，进行牛牛长度的较量。
 5. 牛牛排行：查看当前群内牛牛长度的排行榜。
         """
         yield event.plain_result(menu)
