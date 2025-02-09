@@ -6,7 +6,7 @@ import time
 from astrbot.api.all import *
 
 # 定义 YAML 文件路径
-PLUGIN_DIR = os.path.join('data', 'plugins', 'astrbot_plugin_niuniu-master')
+PLUGIN_DIR = os.path.join('data', 'plugins', 'astrbot_plugin_niuniu')
 if not os.path.exists(PLUGIN_DIR):
     os.makedirs(PLUGIN_DIR)
 NIUNIU_LENGTHS_FILE = os.path.join(PLUGIN_DIR, 'niuniu_lengths.yml')
